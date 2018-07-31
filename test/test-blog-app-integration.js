@@ -28,7 +28,7 @@ function seedBlogPostData() {
     seedData.push(generateBlogPostData());
   }
   // this will return a promise
-  return Restaurant.insertMany(seedData);
+  return BlogPost.insertMany(seedData);
 }
 
 // used to generate data to put in db
@@ -123,44 +123,41 @@ describe('Blog Posts API resource', function() {
           res = _res;
           expect(res).to.have.status(200);
           // otherwise our db seeding didn't work
-          expect(res.body.posts).to.have.lengthOf.at.least(1);
+          expect(res.body).to.have.lengthOf.at.least(1);
           return BlogPost.count();
         })
         .then(function(count) {
-          expect(res.body.posts).to.have.lengthOf(count);
+          expect(res.body).to.have.lengthOf(count);
         });
     });
 
 
-    it('should return restaurants with right fields', function() {
+    it('should return blog posts with right fields', function() {
       // Strategy: Get back all restaurants, and ensure they have expected keys
 
-      let resRestaurant;
+      let resBlogPost;
       return chai.request(app)
-        .get('/restaurants')
+        .get('/posts')
         .then(function(res) {
           expect(res).to.have.status(200);
           expect(res).to.be.json;
-          expect(res.body.restaurants).to.be.a('array');
-          expect(res.body.restaurants).to.have.lengthOf.at.least(1);
+          expect(res.body).to.be.a('array');
+          expect(res.body).to.have.lengthOf.at.least(1);
+       
 
-          res.body.restaurants.forEach(function(restaurant) {
-            expect(restaurant).to.be.a('object');
-            expect(restaurant).to.include.keys(
-              'id', 'name', 'cuisine', 'borough', 'grade', 'address');
+          res.body.forEach(function(post) {
+            expect(post).to.be.a('object');
+            expect(post).to.include.keys(
+              'id', 'title', 'content', 'author', 'created');
           });
-          resRestaurant = res.body.restaurants[0];
-          return Restaurant.findById(resRestaurant.id);
+          resBlogPost = res.body[0];
+          return BlogPost.findById(resBlogPost.id);
         })
-        .then(function(restaurant) {
+        .then(function(post) {
 
-          expect(resRestaurant.id).to.equal(restaurant.id);
-          expect(resRestaurant.name).to.equal(restaurant.name);
-          expect(resRestaurant.cuisine).to.equal(restaurant.cuisine);
-          expect(resRestaurant.borough).to.equal(restaurant.borough);
-          expect(resRestaurant.address).to.contain(restaurant.address.building);
-
-          expect(resRestaurant.grade).to.equal(restaurant.grade);
+          expect(resBlogPost.title).to.equal(post.title);
+          expect(resBlogPost.content).to.equal(post.content);
+          expect(resBlogPost.author).to.equal(post.authorName);
         });
     });
   });
@@ -170,40 +167,32 @@ describe('Blog Posts API resource', function() {
     // then prove that the restaurant we get back has
     // right keys, and that `id` is there (which means
     // the data was inserted into db)
-    it('should add a new restaurant', function() {
+    it('should add a new blog post', function() {
 
-      const newRestaurant = generateRestaurantData();
-      let mostRecentGrade;
+      const newBlogPost = generateBlogPostData();
+  
 
       return chai.request(app)
-        .post('/restaurants')
-        .send(newRestaurant)
+        .post('/posts')
+        .send(newBlogPost)
         .then(function(res) {
           expect(res).to.have.status(201);
           expect(res).to.be.json;
           expect(res.body).to.be.a('object');
           expect(res.body).to.include.keys(
-            'id', 'name', 'cuisine', 'borough', 'grade', 'address');
-          expect(res.body.name).to.equal(newRestaurant.name);
+            'id', 'title', 'content', 'author', 'created');
+          expect(res.body.title).to.equal(newBlogPost.title);
           // cause Mongo should have created id on insertion
           expect(res.body.id).to.not.be.null;
-          expect(res.body.cuisine).to.equal(newRestaurant.cuisine);
-          expect(res.body.borough).to.equal(newRestaurant.borough);
-
-          mostRecentGrade = newRestaurant.grades.sort(
-            (a, b) => b.date - a.date)[0].grade;
-
-          expect(res.body.grade).to.equal(mostRecentGrade);
-          return Restaurant.findById(res.body.id);
+          expect(res.body.author).to.equal(`${newBlogPost.author.firstName} ${newBlogPost.author.lastName}`);
+          expect(res.body.content).to.equal(newBlogPost.content);
+          return BlogPost.findById(res.body.id);
         })
-        .then(function(restaurant) {
-          expect(restaurant.name).to.equal(newRestaurant.name);
-          expect(restaurant.cuisine).to.equal(newRestaurant.cuisine);
-          expect(restaurant.borough).to.equal(newRestaurant.borough);
-          expect(restaurant.grade).to.equal(mostRecentGrade);
-          expect(restaurant.address.building).to.equal(newRestaurant.address.building);
-          expect(restaurant.address.street).to.equal(newRestaurant.address.street);
-          expect(restaurant.address.zipcode).to.equal(newRestaurant.address.zipcode);
+        .then(function(post) {
+          expect(post.title).to.equal(newBlogPost.title);
+          expect(post.content).to.equal(newBlogPost.content);
+          expect(post.author.firstName).to.equal(newBlogPost.author.firstName);
+          expect(post.author.lastName).to.equal(newBlogPost.author.lastName);
         });
     });
   });
@@ -217,29 +206,35 @@ describe('Blog Posts API resource', function() {
     //  4. Prove restaurant in db is correctly updated
     it('should update fields you send over', function() {
       const updateData = {
-        name: 'fofofofofofofof',
-        cuisine: 'futuristic fusion'
+        title: 'fofofofofofofof',
+        content: 'futuristic fusion',
+        author: {
+            firstName: 'George',
+            lastName: 'Wilson'
+        }
       };
 
-      return Restaurant
+      return BlogPost
         .findOne()
-        .then(function(restaurant) {
-          updateData.id = restaurant.id;
+        .then(function(post) {
+          updateData.id = post.id;
 
           // make request then inspect it to make sure it reflects
           // data we sent
           return chai.request(app)
-            .put(`/restaurants/${restaurant.id}`)
+            .put(`/posts/${post.id}`)
             .send(updateData);
         })
         .then(function(res) {
           expect(res).to.have.status(204);
 
-          return Restaurant.findById(updateData.id);
+          return BlogPost.findById(updateData.id);
         })
-        .then(function(restaurant) {
-          expect(restaurant.name).to.equal(updateData.name);
-          expect(restaurant.cuisine).to.equal(updateData.cuisine);
+        .then(function(post) {
+          expect(post.title).to.equal(updateData.title);
+          expect(post.content).to.equal(updateData.content);
+          expect(post.author.firstName).to.equal(updateData.author.firstName);
+          expect(post.author.lastName).to.equal(updateData.author.lastName);
         });
     });
   });
@@ -250,22 +245,22 @@ describe('Blog Posts API resource', function() {
     //  2. make a DELETE request for that restaurant's id
     //  3. assert that response has right status code
     //  4. prove that restaurant with the id doesn't exist in db anymore
-    it('delete a restaurant by id', function() {
+    it('delete a blog post by id', function() {
 
-      let restaurant;
+      let post;
 
-      return Restaurant
+      return BlogPost
         .findOne()
-        .then(function(_restaurant) {
-          restaurant = _restaurant;
-          return chai.request(app).delete(`/restaurants/${restaurant.id}`);
+        .then(function(_post) {
+            post = _post;
+          return chai.request(app).delete(`/posts/${post.id}`);
         })
         .then(function(res) {
           expect(res).to.have.status(204);
-          return Restaurant.findById(restaurant.id);
+          return BlogPost.findById(post.id);
         })
-        .then(function(_restaurant) {
-          expect(_restaurant).to.be.null;
+        .then(function(_post) {
+          expect(_post).to.be.null;
         });
     });
   });
